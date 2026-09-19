@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clock-Style QTE Minigame</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        #gameContainer {
+            text-align: center;
+            position: relative;
+        }
+        canvas {
+            background-color: #262626;
+            border-radius: 50%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        #ui {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .instruction {
+    color: #aaa;
+    font-size: 14px;
+    margin-top: 5px;
+}
+
+.instruction strong {
+    font-size: 12px;
+}
+
+    </style>
+</head>
+<body>
+
+<div #id="gameContainer">
+    <canvas id="qteCanvas" width="300" height="300"></canvas>
+    <div id="ui">Score: <span id="score">0</span></div>
+    <div class="instruction">Press <strong>SPACEBAR</strong> or <strong>TAP</strong> inside the zone!</div>
+</div>
+
+<script>
+const canvas = document.getElementById('qteCanvas');
+const ctx = canvas.getContext('2d');
+const scoreDisplay = document.getElementById('score');
+
+// Game State Variables
+const centerX = canvas.width / 2;
+const centerY = canvas.height / 2;
+const radius = 120;
+
+let needleAngle = 0; 
+let needleSpeed = 0.05; // Radians per frame
+let zoneStartAngle = 0;
+let zoneEndAngle = 0;
+let score = 0;
+let isGameOver = false;
+let feedbackText = "";
+let feedbackColor = "#ffffff";
+let feedbackTimer = 0;
+
+// Initialize a new round with a random success zone
+function generateNewZone() {
+    // Fixed hit-point size: 60 degrees
+    const zoneWidth = 60 * (Math.PI / 180);
+
+    // Random start position
+    zoneStartAngle = Math.random() * Math.PI * 2;
+    zoneEndAngle = zoneStartAngle + zoneWidth;
+
+    // Increase speed each round
+    needleSpeed = 0.10 + (score * 0.01);
+
+    // Maximum playable speed
+    if (needleSpeed > 0.15) needleSpeed = 0.15;
+}
+
+
+// Check player input
+function handleInput() {
+    if (isGameOver) {
+        resetGame();
+        return;
+    }
+
+    // Normalize angles to be between 0 and 2PI for reliable comparison
+    const normalizedNeedle = needleAngle % (Math.PI * 2);
+    let targetStart = zoneStartAngle % (Math.PI * 2);
+    let targetEnd = zoneEndAngle % (Math.PI * 2);
+
+    // Handle wrapping around the 0/2PI boundary
+    let success = false;
+    if (targetEnd < targetStart) {
+        if (normalizedNeedle >= targetStart || normalizedNeedle <= targetEnd) success = true;
+    } else {
+        if (normalizedNeedle >= targetStart && normalizedNeedle <= targetEnd) success = true;
+    }
+
+    if (success) {
+        score++;
+        scoreDisplay.textContent = score;
+        triggerFeedback("SUCCESS!", "#4CAF50");
+        generateNewZone();
+    } else {
+        triggerFeedback("GAME OVER", "#F44336");
+        isGameOver = true;
+    }
+}
+
+function triggerFeedback(text, color) {
+    feedbackText = text;
+    feedbackColor = color;
+    feedbackTimer = 30; // display for 30 frames
+}
+
+function resetGame() {
+    score = 0;
+    scoreDisplay.textContent = score;
+    isGameOver = false;
+    needleAngle = 0;
+    feedbackText = "";
+    generateNewZone();
+}
+
+// Input Listeners
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        handleInput();
+    }
+});
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    handleInput();
+});
+canvas.addEventListener('mousedown', (e) => {
+    handleInput();
+});
+
+// Main Game Loop
+function update() {
+    if (!isGameOver) {
+        needleAngle += needleSpeed;
+        if (needleAngle > Math.PI * 2) {
+            needleAngle -= Math.PI * 2;
+        }
+    }
+
+    // Clear Canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. Draw Background Ring Track
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = '#3d3d3d';
+    ctx.lineWidth = 20;
+    ctx.stroke();
+
+    // 2. Draw Success Zone Arc
+ctx.beginPath();
+ctx.arc(centerX, centerY, radius, zoneStartAngle, zoneEndAngle);
+ctx.strokeStyle = '#4CAF50'; // Green hit point
+ctx.lineWidth = 12;         // Fixed size
+ctx.lineCap = 'butt';
+ctx.stroke();
+
+    // 3. Draw Moving Needle
+    <!-- 3. Draw Moving Arrow -->
+ctx.save();
+ctx.translate(centerX, centerY);
+ctx.rotate(needleAngle);
+
+ctx.strokeStyle = '#ffeb3b';
+ctx.fillStyle = '#ffeb3b';
+ctx.lineWidth = 4;
+ctx.lineCap = 'round';
+ctx.lineJoin = 'round';
+
+// Arrow shaft
+ctx.beginPath();
+ctx.moveTo(0, 0);
+ctx.lineTo(radius + 15, 0);
+ctx.stroke();
+
+// Arrow head
+ctx.beginPath();
+ctx.moveTo(radius + 15, 0);
+ctx.lineTo(radius - 5, -10);
+ctx.lineTo(radius - 5, 10);
+ctx.closePath();
+ctx.fill();
+
+ctx.restore();
+
+    // 4. Draw Center Cap
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffeb3b';
+    ctx.fill();
+
+    // 5. Render Floating Hit/Miss Feedback Text
+    if (feedbackTimer > 0) {
+        ctx.fillStyle = feedbackColor;
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(feedbackText, centerX, centerY + 160);
+        feedbackTimer--;
+        
+        if (isGameOver) {
+            ctx.fillStyle = '#aaa';
+            ctx.font = '16px Arial';
+            ctx.fillText("Press Space to Restart", centerX, centerY + 190);
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+// Start Game
+generateNewZone();
+update();
+</script>
+
+</body>
+</html>
